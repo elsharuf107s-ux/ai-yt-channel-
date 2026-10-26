@@ -1,0 +1,16 @@
+{
+  "name": "AI Shell",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm",
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": {
+      "label": "AI Shell",
+      "onAutoForward": "notify"
+    }
+  },
+  "postCreateCommand": "npm install",
+  "postStartCommand": "bash -lc 'nohup npm start > /tmp/ai-shell.log 2>&1 &'",
+  "remoteEnv": {
+    "PORT": "3000"
+  }
+}
