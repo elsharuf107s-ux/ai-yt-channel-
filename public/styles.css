@@ -208,6 +208,15 @@ label.inline { flex-direction: row; align-items: center; gap: 8px; font-weight: 
 .card .actions { gap: 8px; }
 .card .btn { padding: 6px 14px; }
 
+.model-box { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--sunken); }
+.model-state { font-weight: 700; }
+.model-state.ready { color: var(--ok); }
+.model-state.failed { color: var(--danger); }
+.warnings { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.warnings li { font-size: 0.82rem; padding: 6px 10px; border-radius: 6px; background: var(--warn-bg); color: var(--warn-text); }
+pre.log { margin: 6px 0 0; padding: 8px 10px; background: var(--panel); border-radius: 6px; font: 0.75rem/1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 220px; overflow: auto; }
+.model-box summary { cursor: pointer; color: var(--muted); font-size: 0.85rem; }
+
 dialog {
   width: min(520px, calc(100vw - 32px));
   max-height: calc(100vh - 32px);
@@ -220,6 +229,8 @@ dialog {
 }
 dialog::backdrop { background: rgb(0 0 0 / 0.5); }
 dialog form { display: flex; flex-direction: column; gap: 14px; }
+dialog form > div[id^="group-"] { display: flex; flex-direction: column; gap: 14px; }
+dialog .fields { align-items: end; }
 
 @media (max-width: 900px) {
   .layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "task" "live" "activity"; }

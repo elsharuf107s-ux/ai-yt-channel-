@@ -6,6 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createConfigStore, validatePatch } from './lib/config.js';
 import { createBridgeQueue } from './lib/bridge-queue.js';
 import { createRunManager } from './lib/runs.js';
+import { createModelRunner } from './lib/model-runner.js';
 import { createLlm as defaultCreateLlm } from './lib/llm/index.js';
 import { httpError } from './lib/errors.js';
 
@@ -37,7 +38,12 @@ export function createApp(deps = {}) {
   const bridgeToken = deps.bridgeToken ?? process.env.AI_SHELL_BRIDGE_TOKEN ?? '';
   const extraHosts = String(deps.allowedHosts ?? process.env.ALLOWED_HOSTS ?? '').split(',').map((h) => h.trim().toLowerCase()).filter(Boolean);
   const dataDir = deps.dataDir ?? process.env.AI_SHELL_DATA_DIR ?? path.join(__dirname, 'data');
-  const createLlm = deps.createLlm ?? defaultCreateLlm;
+  const runner = deps.runner ?? createModelRunner({
+    modelsDir: deps.modelsDir ?? process.env.AI_SHELL_MODELS_DIR ?? path.join(__dirname, 'models'),
+    binDir: deps.binDir ?? path.join(__dirname, 'bin'),
+    port: Number(process.env.AI_SHELL_MODEL_PORT) || 8081
+  });
+  const createLlm = deps.createLlm ?? ((config) => defaultCreateLlm(config, { runner }));
   const configStore = deps.configStore ?? createConfigStore({ file: path.join(dataDir, 'config.json') });
   const bridge = deps.bridge ?? createBridgeQueue();
   const runs = deps.runs ?? createRunManager({
@@ -87,7 +93,8 @@ export function createApp(deps = {}) {
       app: 'AI Shell',
       version: pkg.version,
       backend: settings.backend,
-      model: settings.backend === 'hf-local' ? settings.localModel : settings.textModel,
+      model: { 'hf-local': settings.localModel, gguf: settings.modelRepo, server: settings.serverModel }[settings.backend] ?? settings.textModel,
+      modelState: settings.backend === 'gguf' ? runner.status().state : null,
       configured: settings.configured,
       autonomy: settings.autonomy,
       bridge: bridge.status(),
@@ -97,6 +104,17 @@ export function createApp(deps = {}) {
 
   app.get('/api/settings', async (_req, res) => res.json(await configStore.publicView()));
   app.patch('/api/settings', async (req, res) => res.json(await configStore.save(req.body || {})));
+
+  app.get('/api/model', async (_req, res) => {
+    const config = await configStore.resolve();
+    res.json({ ...runner.status(), repo: config.modelRepo, quant: config.modelQuant, selected: config.backend === 'gguf' });
+  });
+
+  app.post('/api/model/start', async (_req, res) => {
+    res.status(202).json(await runner.start(await configStore.resolve()));
+  });
+
+  app.post('/api/model/stop', async (_req, res) => res.json(await runner.stop()));
 
   app.post('/api/settings/test', async (req, res) => {
     const config = await configStore.resolve(validatePatch(req.body || {}));
@@ -171,7 +189,7 @@ export function createApp(deps = {}) {
     res.status(status).json({ error: message });
   });
 
-  app.locals.deps = { configStore, bridge, runs };
+  app.locals.deps = { configStore, bridge, runs, runner };
   return app;
 }
 
@@ -181,9 +199,12 @@ export function start(port = Number(process.env.PORT || 3000), host = process.en
     console.log(`AI Shell running on http://${host}:${server.address().port}`);
     console.log('Keep this port PRIVATE: anyone who can open it can run commands in this Codespace.');
   });
-  const shutdown = () => server.close(() => process.exit(0));
+  const { runner } = app.locals.deps;
+  // Stop the model first so it releases its memory, then the web server.
+  const shutdown = () => runner.stop().catch(() => {}).finally(() => server.close(() => process.exit(0)));
   process.once('SIGTERM', shutdown);
   process.once('SIGINT', shutdown);
+  process.once('exit', () => runner.killNow());
   return server;
 }
 

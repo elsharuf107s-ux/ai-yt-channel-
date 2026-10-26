@@ -88,7 +88,9 @@ function chip(id, text, kind) {
 async function refreshHealth() {
   try {
     const health = await api('/api/health');
-    chip('chip-brain', health.configured ? `Brain: ${health.model}` : 'Brain: add a Hugging Face token in Settings', health.configured ? 'ok' : 'warn');
+    const builtIn = health.backend === 'gguf';
+    const brainReady = health.configured && (!builtIn || health.modelState === 'ready');
+    chip('chip-brain', health.configured ? `Brain: ${health.model}${builtIn ? ` (${MODEL_LABELS[health.modelState] || health.modelState})` : ''}` : 'Brain: add a Hugging Face token in Settings', brainReady ? 'ok' : 'warn');
     chip('chip-bridge', health.bridge.online ? 'Browser: connected' : 'Browser: not connected', health.bridge.online ? 'ok' : 'warn');
     const modes = { ask: ['Safety: asks before risky actions', 'ok'], strict: ['Safety: asks before almost everything', 'ok'], auto: ['Safety: never asks', 'warn'] };
     chip('chip-mode', ...(modes[health.autonomy] || [`Safety: ${health.autonomy}`, null]));
@@ -321,10 +323,44 @@ async function improvePrompt() {
 
 /* ---------- settings ---------- */
 
+const GROUPS = { 'hf-api': 'group-api', gguf: 'group-gguf', server: 'group-server', 'hf-local': 'group-local' };
+const MODEL_LABELS = { stopped: 'Not running', starting: 'Starting', ready: 'Ready', failed: 'Stopped with a problem' };
+let modelTimer = null;
+
+function stopModelPolling() {
+  clearInterval(modelTimer);
+  modelTimer = null;
+}
+
+async function refreshModel() {
+  try {
+    const m = await api('/api/model');
+    const stateEl = $('model-state');
+    stateEl.textContent = m.state === 'ready' ? 'Ready' : `${MODEL_LABELS[m.state] || m.state}: ${m.message}`;
+    stateEl.className = `model-state ${m.state}`;
+    const box = m.machine;
+    $('model-machine').textContent = `This machine: ${box.ramGB} GB RAM, ${box.cpus} CPU cores${box.freeDiskGB === null ? '' : `, ${box.freeDiskGB} GB free disk`}. llama.cpp: ${m.binary ? 'installed' : 'not installed yet (npm run setup:llama)'}.`;
+    $('model-warnings').replaceChildren(...m.warnings.map((text) => h('li', { text })));
+    $('model-log').textContent = m.log.join('\n');
+    const live = m.state === 'starting' || m.state === 'ready';
+    $('model-start').disabled = live;
+    $('model-stop').disabled = !live;
+  } catch (error) {
+    $('model-state').textContent = error.message;
+  }
+}
+
+function startModelPolling() {
+  refreshModel();
+  if (!modelTimer) modelTimer = setInterval(refreshModel, 2000);
+}
+
 function toggleBackendGroups() {
-  const local = $('set-backend').value === 'hf-local';
-  $('group-api').hidden = local;
-  $('group-local').hidden = !local;
+  const backend = $('set-backend').value;
+  for (const [name, id] of Object.entries(GROUPS)) $(id).hidden = name !== backend;
+  $('row-thinking').hidden = backend !== 'gguf' && backend !== 'server';
+  if (backend === 'gguf' && $('settings').open) startModelPolling();
+  else stopModelPolling();
 }
 
 function settingsMessage(text, kind = 'warn') {
@@ -348,8 +384,18 @@ async function openSettings() {
     $('set-token').value = '';
     $('set-clear-token').checked = false;
     $('token-state').textContent = s.hfToken.set ? `(saved: ${s.hfToken.preview}, from ${s.hfToken.source})` : '(not set)';
-    toggleBackendGroups();
+    $('set-model-repo').value = s.modelRepo;
+    $('set-model-quant').value = s.modelQuant;
+    $('set-model-context').value = s.modelContext;
+    $('set-model-file').value = s.modelFile;
+    $('set-server-url').value = s.serverUrl;
+    $('set-server-model').value = s.serverModel;
+    $('set-server-key').value = '';
+    $('set-clear-server-key').checked = false;
+    $('server-key-state').textContent = s.serverKey.set ? `(saved: ${s.serverKey.preview})` : '(not set)';
+    $('set-thinking').checked = s.thinking;
     $('settings').showModal();
+    toggleBackendGroups();
   } catch (error) {
     setNote(error.message);
   }
@@ -363,11 +409,21 @@ function settingsPatch() {
     useVision: $('set-use-vision').checked,
     localModel: $('set-local-model').value,
     autonomy: $('set-autonomy').value,
-    maxSteps: Number($('set-max-steps').value)
+    maxSteps: Number($('set-max-steps').value),
+    modelRepo: $('set-model-repo').value,
+    modelQuant: $('set-model-quant').value,
+    modelFile: $('set-model-file').value,
+    modelContext: Number($('set-model-context').value),
+    serverUrl: $('set-server-url').value,
+    serverModel: $('set-server-model').value,
+    thinking: $('set-thinking').checked
   };
   const token = $('set-token').value.trim();
   if (token) patch.hfToken = token;
   else if ($('set-clear-token').checked) patch.hfToken = '';
+  const serverKey = $('set-server-key').value.trim();
+  if (serverKey) patch.serverKey = serverKey;
+  else if ($('set-clear-server-key').checked) patch.serverKey = '';
   return patch;
 }
 
@@ -377,10 +433,35 @@ async function saveSettings() {
     settingsMessage('Saved.', 'good');
     $('set-token').value = '';
     $('set-clear-token').checked = false;
+    $('set-server-key').value = '';
+    $('set-clear-server-key').checked = false;
     refreshHealth();
+    return true;
+  } catch (error) {
+    settingsMessage(error.message);
+    return false;
+  }
+}
+
+async function startModel() {
+  if (!(await saveSettings())) return;
+  try {
+    await api('/api/model/start', { method: 'POST' });
+    settingsMessage('Starting the model. Watch the status below.', 'good');
   } catch (error) {
     settingsMessage(error.message);
   }
+  refreshModel();
+}
+
+async function stopModel() {
+  try {
+    await api('/api/model/stop', { method: 'POST' });
+  } catch (error) {
+    settingsMessage(error.message);
+  }
+  refreshModel();
+  refreshHealth();
 }
 
 async function testSettings() {
@@ -420,6 +501,9 @@ function wire() {
   $('settings-save').addEventListener('click', saveSettings);
   $('settings-test').addEventListener('click', testSettings);
   $('settings-close').addEventListener('click', () => $('settings').close());
+  $('settings').addEventListener('close', stopModelPolling);
+  $('model-start').addEventListener('click', startModel);
+  $('model-stop').addEventListener('click', stopModel);
 }
 
 async function init() {

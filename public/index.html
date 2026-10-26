@@ -85,7 +85,9 @@
       <label>Brain
         <select id="set-backend">
           <option value="hf-api">Hugging Face API (hosted models)</option>
-          <option value="hf-local">Local model inside the Codespace</option>
+          <option value="gguf">Built-in model (a GGUF run inside this Codespace)</option>
+          <option value="server">Model server you run (llama.cpp, Ollama, LM Studio…)</option>
+          <option value="hf-local">Small local model (transformers.js)</option>
         </select>
       </label>
 
@@ -103,6 +105,50 @@
         <label>Local model id <input id="set-local-model" type="text" spellcheck="false"></label>
         <p class="muted small">Small local models are free and private but weak at multi-step tasks. Install once with <code>npm run setup:local-model</code>.</p>
       </div>
+
+      <div id="group-gguf" hidden>
+        <label><span>Model on Hugging Face <span class="hint">(owner/name of a GGUF repo)</span></span>
+          <input id="set-model-repo" type="text" spellcheck="false">
+        </label>
+        <div class="fields">
+          <label><span>Quantization <span class="hint">(optional, e.g. Q4_K_M)</span></span>
+            <input id="set-model-quant" type="text" spellcheck="false">
+          </label>
+          <label><span>Context size <span class="hint">(tokens)</span></span>
+            <input id="set-model-context" type="number" min="2048" max="262144" step="1024">
+          </label>
+        </div>
+        <label><span>Model file <span class="hint">(optional, inside models/)</span></span>
+          <input id="set-model-file" type="text" spellcheck="false" placeholder="found automatically">
+        </label>
+        <div class="model-box">
+          <p id="model-state" class="model-state" role="status">Checking…</p>
+          <p id="model-machine" class="muted small"></p>
+          <ul id="model-warnings" class="warnings"></ul>
+          <div class="actions">
+            <button id="model-start" class="btn primary" type="button">Save and start model</button>
+            <button id="model-stop" class="btn" type="button">Stop model</button>
+          </div>
+          <details><summary>Log</summary><pre id="model-log" class="log"></pre></details>
+        </div>
+        <p class="muted small">One-time setup in the Codespace terminal: <code>npm run setup:llama</code>, then <code>npm run setup:model -- --include "*Q4_K_M*"</code> (pick the quantization that fits your RAM). The model stays on the Codespace's disk, never in git.</p>
+      </div>
+
+      <div id="group-server" hidden>
+        <label><span>Server address <span class="hint">(include /v1)</span></span>
+          <input id="set-server-url" type="text" spellcheck="false" placeholder="http://127.0.0.1:8080/v1">
+        </label>
+        <label><span>Model name</span>
+          <input id="set-server-model" type="text" spellcheck="false">
+        </label>
+        <label><span>API key <span class="hint" id="server-key-state"></span></span>
+          <input id="set-server-key" type="password" autocomplete="off" placeholder="only if your server needs one">
+        </label>
+        <label class="inline"><input id="set-clear-server-key" type="checkbox"> Remove the saved API key</label>
+        <p class="muted small">The Codespace sends your prompts and page text to this address, so it must be reachable from the Codespace and be one you trust.</p>
+      </div>
+
+      <label class="inline" id="row-thinking" hidden><input id="set-thinking" type="checkbox"> Let the model think before answering (slower, uses far more tokens)</label>
 
       <label>Safety
         <select id="set-autonomy">

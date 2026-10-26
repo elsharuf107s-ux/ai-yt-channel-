@@ -1,6 +1,6 @@
 # AI Shell
 
-Tell an AI what to do in plain words and watch it do it: open websites, click, type, read pages, run commands. The agent runs in your **GitHub Codespace** and thinks with a **Hugging Face model**: either one hosted by Hugging Face (called from the Codespace) or a small one running inside the Codespace. The only thing that runs on your own computer is a small helper that opens a browser window the AI can use.
+Tell an AI what to do in plain words and watch it do it: open websites, click, type, read pages, run commands. The agent runs in your **GitHub Codespace** and thinks with a **Hugging Face model**: one hosted by Hugging Face, a GGUF model the app runs inside the Codespace, or a model server you point it at. The only thing that runs on your own computer is a small helper that opens a browser window the AI can use.
 
 ```text
  GitHub Codespace  (the brain)                      Your computer  (the hands)
@@ -68,12 +68,45 @@ Bridge options: `--server URL`, `--headless`, `--profile DIR`, `--chromium-path 
 
 ## Models
 
-**Settings → Brain**
+**Settings → Brain** offers four ways to give the agent a model:
 
-- **Hugging Face API** (default): hosted models through Hugging Face's OpenAI-compatible router. Strong, fast, needs your token and counts against your Hugging Face usage. The text model and an optional vision model (so the AI can look at screenshots) are plain text fields. The defaults are starting points: swap in any chat model your account can use.
-- **Local model**: a small model inside the Codespace via `@huggingface/transformers` (`npm run setup:local-model` once). Free and private, but Codespaces have no GPU and small models struggle with multi-step tasks. Fine for trying things out.
+| Brain | Where the model runs | Good for |
+| --- | --- | --- |
+| **Hugging Face API** (default) | Hugging Face's servers, called from the Codespace with your token | Strong models on any Codespace size |
+| **Built-in model** | Inside the Codespace, run by llama.cpp from a GGUF file | Private, no per-token cost, e.g. the SC117 model below |
+| **Model server** | A server you run (llama-server, Ollama, LM Studio, vLLM) at any address the Codespace can reach | Models too big for the Codespace |
+| **Small local model** | Inside the Codespace via transformers.js | Trying things out; weak at multi-step tasks |
 
-The AI replies in a simple JSON format rather than relying on a model's built-in tool calling, so almost any instruct model works with either backend.
+The AI replies in a simple JSON format rather than relying on a model's built-in tool calling, so almost any instruct model works with any of them. Reasoning written inside `<think>…</think>` is stripped before the reply is read.
+
+### Built-in model: `SC117/Qwen3.8-Flash-Next-GSQ-RCO-abliterated-GGUF`
+
+That repository is the default for the built-in model. The weights are far too big for git, so they live on the Codespace's disk (`models/`, git-ignored) and the app starts and stops llama.cpp's `llama-server` for you.
+
+1. One-time setup in the Codespace terminal:
+
+   ```bash
+   npm run setup:llama                               # installs llama.cpp's llama-server into bin/
+   curl -LsSf https://hf.co/cli/install.sh | bash    # the hf command, if you do not have it yet
+   npm run setup:model -- --include "*Q4_K_M*"       # downloads ONE quantization into models/
+   ```
+
+   Pick the quantization that fits your RAM and disk. The command refuses to download every quantization by accident and resumes if interrupted. Use `hf download` rather than `git clone`: a clone keeps two copies of the weights. If you skip this step, llama.cpp downloads the model itself the first time you press Start.
+
+2. In the app: **Settings → Brain → Built-in model → Save and start model**. The panel shows the machine's RAM and free disk, a status line (downloading / loading / ready), warnings and the llama.cpp log. Tasks run once it says *Ready*. **Stop model** frees the memory, and the app also stops it on shutdown.
+
+Set `AI_SHELL_BACKEND=gguf` (for example as a Codespaces secret) to make it the default brain. Other knobs: `LLAMA_SERVER` (path to a llama-server of your own), `AI_SHELL_MODELS_DIR`, `AI_SHELL_MODEL_PORT`.
+
+Before you try it:
+
+- **Size.** The build environment could not open the SC117 repository (Hugging Face was blocked there), so its file names, sizes and licence are unconfirmed. Web search summaries describe the Qwen3.8-Flash-Next family as roughly 125B parameters with quantizations of about 70–110 GB, needing a recent llama.cpp. If that holds, a default Codespace (a few cores, 8–16 GB of RAM, about 32 GB of disk) cannot run it: you would need a much larger machine type, a smaller quantization, or the Model server option. Even then CPU-only generation is slow, and every agent step sends a page of text.
+- **llama.cpp version.** The newest architectures can need a very recent llama.cpp. If the log says `unknown model architecture`, install a newer build and point `LLAMA_SERVER` at it.
+- **Thinking** is off by default (faster and cheaper per step). Turn it on in Settings if you want the model to reason first.
+- **Abliterated** means the model's own refusal behaviour has been removed. The approval rules in this app are enforced by the app, not the model, so they still apply, but the model will not decline instructions hidden in a web page by itself. Keep Safety on *Ask before risky actions*.
+
+### Model server
+
+Point **Server address** at any OpenAI-compatible endpoint, for example `http://HOST:8080/v1` for `llama-server -hf SC117/Qwen3.8-Flash-Next-GSQ-RCO-abliterated-GGUF --jinja`, or Ollama's `http://HOST:11434/v1`. The Codespace sends your prompts and page text to that address, so use one you trust that the Codespace can reach.
 
 ## Safety
 
@@ -102,7 +135,7 @@ Other protections:
 - One task at a time. Task history lives in memory and is lost when the server restarts.
 - Long watches need the Codespace to stay awake. Codespaces stop after an idle period (30 minutes by default): raise the idle timeout in your GitHub Codespaces settings and keep the app's browser tab open for long runs.
 - The model decides what to click, so verify anything important. Treat results as a draft.
-- The Hugging Face connection was written against Hugging Face's documented API and tested with stubbed responses. It has not been run against the live service, so the first thing to do is **Test the model** in Settings.
+- The Hugging Face API connection was tested with stubbed responses, and the built-in model with a stand-in `llama-server` that speaks llama.cpp's HTTP API. Neither has been run against the live services or a real llama.cpp, so the first thing to do is press **Test the model** in Settings.
 
 ## Commands
 
@@ -112,7 +145,9 @@ npm run dev                # restart on file changes
 npm run bridge             # the browser helper, on your computer
 npm run check              # syntax check
 npm test                   # unit, API and real-browser end-to-end tests
-npm run setup:local-model  # optional: local model support
+npm run setup:llama        # install llama.cpp's llama-server for the built-in model
+npm run setup:model -- --include "*Q4_K_M*"   # download one GGUF quantization
+npm run setup:local-model  # optional: transformers.js model support
 ```
 
 ## Layout
@@ -131,8 +166,11 @@ lib/
   browser-driver.js    what the helper does in Chromium (runs on your computer)
   config.js            saved settings, token masking
   redact.js            keeps secrets out of logs and prompts
-  llm/                 Hugging Face API backend and local-model backend
+  model-runner.js      starts/stops llama.cpp's llama-server for the built-in GGUF model
+  llm/                 chat backends: Hugging Face API, built-in/server (OpenAI-compatible), transformers.js
 scripts/local-bridge.js  the browser helper
+scripts/setup-llama.js   installs llama-server; setup-model.js downloads a GGUF with the hf CLI
+models/  bin/            downloaded weights and llama.cpp (git-ignored)
 public/                the on-screen UI
 test/                  unit, API and end-to-end tests
 ```

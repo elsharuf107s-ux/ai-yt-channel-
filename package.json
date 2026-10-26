@@ -10,7 +10,9 @@
     "bridge": "node scripts/local-bridge.js",
     "check": "node scripts/check.js",
     "test": "node --test test/*.test.js",
-    "setup:local-model": "npm install --save-optional @huggingface/transformers"
+    "setup:local-model": "npm install --save-optional @huggingface/transformers",
+    "setup:llama": "node scripts/setup-llama.js",
+    "setup:model": "node scripts/setup-model.js"
   },
   "engines": {
     "node": ">=20"

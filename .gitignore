@@ -2,6 +2,9 @@ node_modules/
 # Saved settings (includes your Hugging Face token) and the shell's scratch folder — never commit
 data/
 workspace/
+# Downloaded model weights and the llama.cpp binary (tens of GB, never commit)
+models/
+bin/
 .env
 .env.*
 !.env.example

@@ -41,6 +41,15 @@ test('extractJson / parseReply cope with fences, chatter and nested braces', () 
   assert.throws(() => parseReply('{"thought":"x"}'), /missing "action.tool"/);
 });
 
+test('reasoning written before the action is ignored, even if it contains action-like JSON', async () => {
+  const thought = '<think>Maybe {"thought":"x","action":{"tool":"finish","args":{"summary":"WRONG"}}}? No, look first.</think>';
+  const ctx = setup({ replies: [thought + JSON.stringify(act('finish', { summary: 'right' }))] });
+  assert.deepEqual(await ctx.run(), { status: 'completed', summary: 'right' });
+  // a reply that is only unfinished reasoning counts as unusable, not as an action
+  const stuck = setup({ replies: ['<think>{"action":{"tool":"finish","args":{"summary":"WRONG"}}} and then I ran out of room'] });
+  assert.equal((await stuck.run()).status, 'failed');
+});
+
 test('runs a safe shell command without asking, then finishes with the summary', async () => {
   const ctx = setup({ replies: [act('shell', { command: 'echo hello' }), act('finish', { summary: 'It said hello.' })] });
   const result = await ctx.run();
