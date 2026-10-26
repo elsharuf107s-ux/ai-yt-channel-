@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>AI Shell</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230f766e'/%3E%3Cpath d='M8 10l7 6-7 6' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M17 22h7' stroke='white' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/styles.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <svg class="logo" viewBox="0 0 32 32" width="28" height="28" aria-hidden="true"><rect width="32" height="32" rx="7"/><path d="M8 10l7 6-7 6" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M17 22h7" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
+      <h1>AI Shell</h1>
+    </div>
+    <div class="chips" role="group" aria-label="Status">
+      <span class="chip" id="chip-brain">Brain: loading…</span>
+      <span class="chip" id="chip-bridge">Browser: checking…</span>
+      <span class="chip" id="chip-mode">Safety: …</span>
+    </div>
+    <button id="open-settings" class="btn ghost" type="button">Settings</button>
+  </header>
+
+  <main class="layout">
+    <section class="panel task" aria-labelledby="task-title">
+      <h2 id="task-title">What should I do?</h2>
+      <div class="examples" role="group" aria-label="Example tasks">
+        <button class="chip-btn" type="button" data-example="site">Do something on a website</button>
+        <button class="chip-btn" type="button" data-example="time">Do it for a set time</button>
+        <button class="chip-btn" type="button" data-example="check">Check something for me</button>
+        <button class="chip-btn" type="button" data-example="shell">Run a command</button>
+      </div>
+      <label class="sr-only" for="task">Task</label>
+      <textarea id="task" rows="6" maxlength="4000" placeholder="Tell it what to do, in plain words. Mention a website, how long to work, or how often to check, e.g. “On bbc.com/weather check London’s forecast every 10 minutes for an hour and tell me if rain is expected.”"></textarea>
+      <p class="plan" id="plan" aria-live="polite"></p>
+      <div class="fields">
+        <label><span>Start at <span class="hint">(optional website)</span></span>
+          <input id="start-url" type="text" inputmode="url" autocomplete="off" placeholder="example.com">
+        </label>
+        <label><span>Time limit <span class="hint">(minutes, optional)</span></span>
+          <input id="minutes" type="number" min="0.5" max="360" step="any" placeholder="from your prompt">
+        </label>
+      </div>
+      <div class="actions">
+        <button id="run" class="btn primary" type="button">Run</button>
+        <button id="improve" class="btn" type="button">Improve prompt</button>
+        <button id="stop" class="btn danger" type="button" hidden>Stop</button>
+      </div>
+      <p id="form-note" class="note" role="status" hidden></p>
+    </section>
+
+    <section class="panel live" aria-labelledby="live-title">
+      <h2 id="live-title">Live browser</h2>
+      <div class="shot-wrap">
+        <img id="shot" alt="Latest view of the browser" hidden>
+        <div id="shot-empty" class="empty">
+          <p id="empty-title" class="empty-title">Waiting for the browser on your computer</p>
+          <div id="setup-help">
+            <p class="muted">The AI thinks here in the Codespace, but it clicks on <em>your</em> computer through a small helper. Start it once:</p>
+            <ol class="steps">
+              <li>Forward this app to your computer:<code>gh codespace ports forward 3000:3000 -R elsharuf107s-ux/ai-yt-channel-</code></li>
+              <li>In a second terminal, in a clone of this repo:<code>npm install &amp;&amp; npx playwright install chromium &amp;&amp; npm run bridge</code></li>
+            </ol>
+          </div>
+        </div>
+      </div>
+      <p id="shot-caption" class="caption"></p>
+    </section>
+
+    <section class="panel activity" aria-labelledby="act-title">
+      <div class="activity-head">
+        <h2 id="act-title">Activity</h2>
+        <p id="status-line" class="status-line" aria-live="polite">Idle</p>
+      </div>
+      <ol id="feed" class="feed" aria-live="polite"></ol>
+    </section>
+  </main>
+
+  <dialog id="settings" aria-labelledby="settings-title">
+    <form id="settings-form" method="dialog" autocomplete="off">
+      <h2 id="settings-title">Settings</h2>
+
+      <label>Brain
+        <select id="set-backend">
+          <option value="hf-api">Hugging Face API (hosted models)</option>
+          <option value="hf-local">Local model inside the Codespace</option>
+        </select>
+      </label>
+
+      <div id="group-api">
+        <label><span>Hugging Face token <span class="hint" id="token-state"></span></span>
+          <input id="set-token" type="password" autocomplete="off" placeholder="hf_… (leave blank to keep the saved one)">
+        </label>
+        <label class="inline"><input id="set-clear-token" type="checkbox"> Remove the saved token</label>
+        <label>Text model id <input id="set-text-model" type="text" spellcheck="false"></label>
+        <label class="inline"><input id="set-use-vision" type="checkbox"> Let the model see screenshots (needs a vision model)</label>
+        <label>Vision model id <input id="set-vision-model" type="text" spellcheck="false"></label>
+      </div>
+
+      <div id="group-local" hidden>
+        <label>Local model id <input id="set-local-model" type="text" spellcheck="false"></label>
+        <p class="muted small">Small local models are free and private but weak at multi-step tasks. Install once with <code>npm run setup:local-model</code>.</p>
+      </div>
+
+      <label>Safety
+        <select id="set-autonomy">
+          <option value="ask">Ask before risky actions (recommended)</option>
+          <option value="strict">Ask before almost everything</option>
+          <option value="auto">Never ask (fully autonomous)</option>
+        </select>
+      </label>
+      <label>Maximum actions per task <input id="set-max-steps" type="number" min="1" max="500" step="1"></label>
+
+      <p id="settings-msg" class="note" role="status" hidden></p>
+      <div class="actions">
+        <button id="settings-save" class="btn primary" type="button">Save</button>
+        <button id="settings-test" class="btn" type="button">Test the model</button>
+        <button id="settings-close" class="btn ghost" type="button">Close</button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>

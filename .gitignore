@@ -1,0 +1,9 @@
+node_modules/
+# Saved settings (includes your Hugging Face token) and the shell's scratch folder — never commit
+data/
+workspace/
+.env
+.env.*
+!.env.example
+.DS_Store
+npm-debug.log*
