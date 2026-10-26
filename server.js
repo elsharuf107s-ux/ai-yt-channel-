@@ -93,7 +93,7 @@ export function createApp(deps = {}) {
       app: 'AI Shell',
       version: pkg.version,
       backend: settings.backend,
-      model: { 'hf-local': settings.localModel, gguf: settings.modelRepo, server: settings.serverModel }[settings.backend] ?? settings.textModel,
+      model: { 'hf-local': settings.localModel, gguf: settings.modelRepo, server: settings.serverModel, anthropic: settings.anthropicModel, openai: settings.openaiModel }[settings.backend] ?? settings.textModel,
       modelState: settings.backend === 'gguf' ? runner.status().state : null,
       configured: settings.configured,
       autonomy: settings.autonomy,

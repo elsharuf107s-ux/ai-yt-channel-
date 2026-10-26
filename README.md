@@ -68,16 +68,28 @@ Bridge options: `--server URL`, `--headless`, `--profile DIR`, `--chromium-path 
 
 ## Models
 
-**Settings → Brain** offers four ways to give the agent a model:
+**Settings → Brain** offers six ways to give the agent a model:
 
 | Brain | Where the model runs | Good for |
 | --- | --- | --- |
 | **Hugging Face API** (default) | Hugging Face's servers, called from the Codespace with your token | Strong models on any Codespace size |
+| **Claude (Anthropic API)** | Anthropic's servers, with your API key | The strongest models; pay per token |
+| **ChatGPT (OpenAI API)** | OpenAI's servers, with your API key | Same, with OpenAI models; pay per token |
 | **Built-in model** | Inside the Codespace, run by llama.cpp from a GGUF file | Private, no per-token cost, e.g. the SC117 model below |
 | **Model server** | A server you run (llama-server, Ollama, LM Studio, vLLM) at any address the Codespace can reach | Models too big for the Codespace |
 | **Small local model** | Inside the Codespace via transformers.js | Trying things out; weak at multi-step tasks |
 
 The AI replies in a simple JSON format rather than relying on a model's built-in tool calling, so almost any instruct model works with any of them. Reasoning written inside `<think>…</think>` is stripped before the reply is read.
+
+### Claude and ChatGPT
+
+Choose **Claude (Anthropic API)** or **ChatGPT (OpenAI API)**, paste an API key (or set `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` as Codespaces secrets, the same names FlipLab uses), and press **Test the model**.
+
+- **They cost money and leave your Codespace.** Anthropic or OpenAI bills you per token, and your prompts, page text and (if you tick it) screenshots are sent to them. An agent resends the whole conversation on every step, so long or timed tasks add up. Watch your usage dashboard on the first runs.
+- **Claude** is called through the official `@anthropic-ai/sdk`. The default model id is `claude-opus-5-5`, Anthropic's most capable current Opus. The model is a plain text field: `claude-sonnet-5-5` and `claude-haiku-5-5` are cheaper (Anthropic's reference lists $2 / $10 and $0.10 / $0.50 per million input / output tokens against $4 / $20 for Opus 5.5 as of 2026-10-06; check their pricing page before relying on it).
+- Claude's safety systems can decline a request. The app turns on Anthropic's server-side fallback (untick it in Settings), which retries a declined request on another model and bills that retry at the other model's rate. If every model declines, the run stops with a clear message instead of a blank reply. Current Claude models reject `temperature`, so the app never sends one.
+- **ChatGPT** uses OpenAI's Chat Completions API. The default model id, `gpt-6-luna`, is the default FlipLab already uses; change it to any model your key can use.
+- Tick **Let the model see screenshots** to send each browser screenshot too. Both can read them, at the price of more tokens per step.
 
 ### Built-in model: `SC117/Qwen3.8-Flash-Next-GSQ-RCO-abliterated-GGUF`
 
@@ -135,6 +147,7 @@ Other protections:
 - One task at a time. Task history lives in memory and is lost when the server restarts.
 - Long watches need the Codespace to stay awake. Codespaces stop after an idle period (30 minutes by default): raise the idle timeout in your GitHub Codespaces settings and keep the app's browser tab open for long runs.
 - The model decides what to click, so verify anything important. Treat results as a draft.
+- Claude was tested through the real Anthropic SDK against a fake server, and once against Anthropic's live API with a deliberately fake key, which it rejected as expected. No real key has been used yet, and OpenAI was unreachable from the build environment, so press **Test the model** first.
 - The Hugging Face API connection was tested with stubbed responses, and the built-in model with a stand-in `llama-server` that speaks llama.cpp's HTTP API. Neither has been run against the live services or a real llama.cpp, so the first thing to do is press **Test the model** in Settings.
 
 ## Commands

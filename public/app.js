@@ -90,7 +90,7 @@ async function refreshHealth() {
     const health = await api('/api/health');
     const builtIn = health.backend === 'gguf';
     const brainReady = health.configured && (!builtIn || health.modelState === 'ready');
-    chip('chip-brain', health.configured ? `Brain: ${health.model}${builtIn ? ` (${MODEL_LABELS[health.modelState] || health.modelState})` : ''}` : 'Brain: add a Hugging Face token in Settings', brainReady ? 'ok' : 'warn');
+    chip('chip-brain', health.configured ? `Brain: ${health.model}${builtIn ? ` (${MODEL_LABELS[health.modelState] || health.modelState})` : ''}` : 'Brain: add an API key or token in Settings', brainReady ? 'ok' : 'warn');
     chip('chip-bridge', health.bridge.online ? 'Browser: connected' : 'Browser: not connected', health.bridge.online ? 'ok' : 'warn');
     const modes = { ask: ['Safety: asks before risky actions', 'ok'], strict: ['Safety: asks before almost everything', 'ok'], auto: ['Safety: never asks', 'warn'] };
     chip('chip-mode', ...(modes[health.autonomy] || [`Safety: ${health.autonomy}`, null]));
@@ -323,7 +323,7 @@ async function improvePrompt() {
 
 /* ---------- settings ---------- */
 
-const GROUPS = { 'hf-api': 'group-api', gguf: 'group-gguf', server: 'group-server', 'hf-local': 'group-local' };
+const GROUPS = { 'hf-api': 'group-api', anthropic: 'group-anthropic', openai: 'group-openai', gguf: 'group-gguf', server: 'group-server', 'hf-local': 'group-local' };
 const MODEL_LABELS = { stopped: 'Not running', starting: 'Starting', ready: 'Ready', failed: 'Stopped with a problem' };
 let modelTimer = null;
 
@@ -359,6 +359,7 @@ function toggleBackendGroups() {
   const backend = $('set-backend').value;
   for (const [name, id] of Object.entries(GROUPS)) $(id).hidden = name !== backend;
   $('row-thinking').hidden = backend !== 'gguf' && backend !== 'server';
+  $('row-vision').hidden = !['hf-api', 'anthropic', 'openai'].includes(backend);
   if (backend === 'gguf' && $('settings').open) startModelPolling();
   else stopModelPolling();
 }
@@ -368,6 +369,14 @@ function settingsMessage(text, kind = 'warn') {
   el.hidden = !text;
   el.textContent = text || '';
   el.classList.toggle('good', kind === 'good');
+}
+
+function showKeyStates(settings) {
+  const hint = (key) => (key.set ? `(saved: ${key.preview}, from ${key.source})` : '(not set)');
+  $('token-state').textContent = hint(settings.hfToken);
+  $('server-key-state').textContent = hint(settings.serverKey);
+  $('anthropic-key-state').textContent = hint(settings.anthropicKey);
+  $('openai-key-state').textContent = hint(settings.openaiKey);
 }
 
 async function openSettings() {
@@ -383,7 +392,7 @@ async function openSettings() {
     $('set-max-steps').value = s.maxSteps;
     $('set-token').value = '';
     $('set-clear-token').checked = false;
-    $('token-state').textContent = s.hfToken.set ? `(saved: ${s.hfToken.preview}, from ${s.hfToken.source})` : '(not set)';
+    showKeyStates(s);
     $('set-model-repo').value = s.modelRepo;
     $('set-model-quant').value = s.modelQuant;
     $('set-model-context').value = s.modelContext;
@@ -392,8 +401,14 @@ async function openSettings() {
     $('set-server-model').value = s.serverModel;
     $('set-server-key').value = '';
     $('set-clear-server-key').checked = false;
-    $('server-key-state').textContent = s.serverKey.set ? `(saved: ${s.serverKey.preview})` : '(not set)';
     $('set-thinking').checked = s.thinking;
+    $('set-anthropic-key').value = '';
+    $('set-clear-anthropic-key').checked = false;
+    $('set-anthropic-model').value = s.anthropicModel;
+    $('set-anthropic-fallbacks').checked = s.anthropicFallbacks;
+    $('set-openai-key').value = '';
+    $('set-clear-openai-key').checked = false;
+    $('set-openai-model').value = s.openaiModel;
     $('settings').showModal();
     toggleBackendGroups();
   } catch (error) {
@@ -416,7 +431,10 @@ function settingsPatch() {
     modelContext: Number($('set-model-context').value),
     serverUrl: $('set-server-url').value,
     serverModel: $('set-server-model').value,
-    thinking: $('set-thinking').checked
+    thinking: $('set-thinking').checked,
+    anthropicModel: $('set-anthropic-model').value,
+    anthropicFallbacks: $('set-anthropic-fallbacks').checked,
+    openaiModel: $('set-openai-model').value
   };
   const token = $('set-token').value.trim();
   if (token) patch.hfToken = token;
@@ -424,17 +442,28 @@ function settingsPatch() {
   const serverKey = $('set-server-key').value.trim();
   if (serverKey) patch.serverKey = serverKey;
   else if ($('set-clear-server-key').checked) patch.serverKey = '';
+  const anthropicKey = $('set-anthropic-key').value.trim();
+  if (anthropicKey) patch.anthropicKey = anthropicKey;
+  else if ($('set-clear-anthropic-key').checked) patch.anthropicKey = '';
+  const openaiKey = $('set-openai-key').value.trim();
+  if (openaiKey) patch.openaiKey = openaiKey;
+  else if ($('set-clear-openai-key').checked) patch.openaiKey = '';
   return patch;
 }
 
 async function saveSettings() {
   try {
-    await api('/api/settings', { method: 'PATCH', body: settingsPatch() });
+    const view = await api('/api/settings', { method: 'PATCH', body: settingsPatch() });
+    showKeyStates(view);
     settingsMessage('Saved.', 'good');
     $('set-token').value = '';
     $('set-clear-token').checked = false;
     $('set-server-key').value = '';
     $('set-clear-server-key').checked = false;
+    $('set-anthropic-key').value = '';
+    $('set-clear-anthropic-key').checked = false;
+    $('set-openai-key').value = '';
+    $('set-clear-openai-key').checked = false;
     refreshHealth();
     return true;
   } catch (error) {

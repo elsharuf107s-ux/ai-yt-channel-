@@ -85,6 +85,8 @@
       <label>Brain
         <select id="set-backend">
           <option value="hf-api">Hugging Face API (hosted models)</option>
+          <option value="anthropic">Claude (Anthropic API)</option>
+          <option value="openai">ChatGPT (OpenAI API)</option>
           <option value="gguf">Built-in model (a GGUF run inside this Codespace)</option>
           <option value="server">Model server you run (llama.cpp, Ollama, LM Studio…)</option>
           <option value="hf-local">Small local model (transformers.js)</option>
@@ -97,13 +99,35 @@
         </label>
         <label class="inline"><input id="set-clear-token" type="checkbox"> Remove the saved token</label>
         <label>Text model id <input id="set-text-model" type="text" spellcheck="false"></label>
-        <label class="inline"><input id="set-use-vision" type="checkbox"> Let the model see screenshots (needs a vision model)</label>
         <label>Vision model id <input id="set-vision-model" type="text" spellcheck="false"></label>
       </div>
 
       <div id="group-local" hidden>
         <label>Local model id <input id="set-local-model" type="text" spellcheck="false"></label>
         <p class="muted small">Small local models are free and private but weak at multi-step tasks. Install once with <code>npm run setup:local-model</code>.</p>
+      </div>
+
+      <div id="group-anthropic" hidden>
+        <label><span>Anthropic API key <span class="hint" id="anthropic-key-state"></span></span>
+          <input id="set-anthropic-key" type="password" autocomplete="off" placeholder="sk-ant-… (leave blank to keep the saved one)">
+        </label>
+        <label class="inline"><input id="set-clear-anthropic-key" type="checkbox"> Remove the saved key</label>
+        <label><span>Claude model <span class="hint">(an Anthropic model id)</span></span>
+          <input id="set-anthropic-model" type="text" spellcheck="false">
+        </label>
+        <label class="inline"><input id="set-anthropic-fallbacks" type="checkbox"> If Claude declines a request, let Anthropic retry it on a fallback model</label>
+        <p class="muted small">Your prompts, page text and any screenshots go to Anthropic and are billed to your Anthropic account. Bigger models cost more per task: type a cheaper model id such as <code>claude-sonnet-5-5</code> or <code>claude-haiku-5-5</code> above if you prefer.</p>
+      </div>
+
+      <div id="group-openai" hidden>
+        <label><span>OpenAI API key <span class="hint" id="openai-key-state"></span></span>
+          <input id="set-openai-key" type="password" autocomplete="off" placeholder="sk-… (leave blank to keep the saved one)">
+        </label>
+        <label class="inline"><input id="set-clear-openai-key" type="checkbox"> Remove the saved key</label>
+        <label><span>ChatGPT model <span class="hint">(an OpenAI model id)</span></span>
+          <input id="set-openai-model" type="text" spellcheck="false">
+        </label>
+        <p class="muted small">Your prompts, page text and any screenshots go to OpenAI and are billed to your OpenAI account.</p>
       </div>
 
       <div id="group-gguf" hidden>
@@ -149,6 +173,7 @@
       </div>
 
       <label class="inline" id="row-thinking" hidden><input id="set-thinking" type="checkbox"> Let the model think before answering (slower, uses far more tokens)</label>
+      <label class="inline" id="row-vision" hidden><input id="set-use-vision" type="checkbox"> Let the model see screenshots of the browser (needs a vision model; uses more tokens)</label>
 
       <label>Safety
         <select id="set-autonomy">

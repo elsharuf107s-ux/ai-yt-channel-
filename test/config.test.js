@@ -56,7 +56,7 @@ test('the local backend counts as configured without a token', async () => {
 
 test('rejects invalid settings', async () => {
   const store = createConfigStore({ file: fileIn(tmpDir()), env: {} });
-  await assert.rejects(store.save({ backend: 'openai' }), /backend must be one of/);
+  await assert.rejects(store.save({ backend: 'gemini' }), /backend must be one of/);
   await assert.rejects(store.save({ autonomy: 'yolo' }), /autonomy must be one of/);
   await assert.rejects(store.save({ textModel: 'has space' }), /spaces/);
   await assert.rejects(store.save({ textModel: '  ' }), /Enter a text model/);
